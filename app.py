@@ -146,7 +146,7 @@ if archivo is not None:
     output = BytesIO()
     with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
         df_scored.to_excel(writer, sheet_name='Resultados', index=False)
-        writer.save()
+        
     processed_data = output.getvalue()
 
     st.download_button(
