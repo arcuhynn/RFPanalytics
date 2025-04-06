@@ -1,6 +1,8 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
+from sklearn.ensemble import RandomForestRegressor
+from sklearn.model_selection import train_test_split
 
 # Título de la app
 st.title("Evaluación de Proveedores para RFP Analítico")
@@ -60,6 +62,43 @@ if archivo is not None:
         df_scored["Reputación externa_score"] * pesos["Reputación externa"]
     )
 
+    # MODELO DE ML: Predicción de "Valor percibido"
+    if "Valor percibido" in df_scored.columns and df_scored["Valor percibido"].notna().sum() > 5:
+        st.subheader("🔍 Predicción de Valor Percibido (modelo entrenado)")
+
+        # Separar datos con y sin etiqueta
+        df_train = df_scored[df_scored["Valor percibido"].notna()]
+        df_pred = df_scored[df_scored["Valor percibido"].isna()]
+
+        features = [
+            "Precio_score", "Tiempo_score", "Normativa_score", "Fiscal_score", "Lista_negra_score",
+            "Calidad del servicio_score", "Capacidad de respuesta_score", "Experiencia previa_score",
+            "Valor agregado_score", "Sostenibilidad_score", "Reputación externa_score"
+        ]
+
+        X = df_train[features]
+        y = df_train["Valor percibido"]
+
+        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+
+        model = RandomForestRegressor(n_estimators=100, random_state=42)
+        model.fit(X_train, y_train)
+
+        if not df_pred.empty:
+            df_scored.loc[df_pred.index, "Valor percibido estimado"] = model.predict(df_pred[features])
+
+            st.success("Modelo entrenado con éxito y aplicado a proveedores sin historial.")
+
+            # Mostrar top 10 por valor percibido estimado
+            top_estimado = df_scored[df_scored["Valor percibido estimado"].notna()].copy()
+            top_estimado = top_estimado[["Proveedor", "Valor percibido estimado"]].sort_values(
+                by="Valor percibido estimado", ascending=False).head(10)
+
+            st.markdown("### 🌟 Top 10 proveedores por valor percibido estimado")
+            st.dataframe(top_estimado.style.background_gradient(cmap='Blues'))
+        else:
+            st.info("Todos los proveedores ya tienen historial de valor percibido. No se aplicó predicción.")
+
     # RESUMEN EJECUTIVO
     st.subheader("Resumen Ejecutivo")
     st.metric("Número de proveedores evaluados", len(df_scored))
@@ -92,15 +131,31 @@ if archivo is not None:
     for criterio, columna in criterios_visuales.items():
         st.markdown(f"### {criterio}")
 
-        # Top 10 interactivo
         top10 = df_scored.nlargest(10, columna)[["Proveedor", columna]].sort_values(by=columna, ascending=True)
         fig_top = px.bar(top10, x=columna, y="Proveedor", orientation="h", title=f"Top 10 proveedores por {criterio}", color=columna)
         st.plotly_chart(fig_top)
 
-        # Bottom 10 interactivo
         bottom10 = df_scored.nsmallest(10, columna)[["Proveedor", columna]].sort_values(by=columna, ascending=True)
         fig_bottom = px.bar(bottom10, x=columna, y="Proveedor", orientation="h", title=f"Bottom 10 proveedores por {criterio}", color=columna)
         st.plotly_chart(fig_bottom)
+    # Exportar resultados con predicción y score total
+    st.subheader("📥 Descargar resultados procesados")
+
+    from io import BytesIO
+
+    output = BytesIO()
+    with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+        df_scored.to_excel(writer, sheet_name='Resultados', index=False)
+        writer.save()
+    processed_data = output.getvalue()
+
+    st.download_button(
+        label="Descargar archivo Excel con resultados",
+        data=processed_data,
+        file_name="Evaluacion_Proveedores_Procesada.xlsx",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    )
 
 else:
     st.info("Por favor, sube un archivo Excel para comenzar.")
+
