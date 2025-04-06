@@ -1,6 +1,6 @@
 import streamlit as st
 import pandas as pd
-import matplotlib.pyplot as plt
+import plotly.express as px
 
 # Título de la app
 st.title("Evaluación de Proveedores para RFP Analítico")
@@ -60,13 +60,23 @@ if archivo is not None:
         df_scored["Reputación externa_score"] * pesos["Reputación externa"]
     )
 
+    # RESUMEN EJECUTIVO
+    st.subheader("Resumen Ejecutivo")
+    st.metric("Número de proveedores evaluados", len(df_scored))
+    st.metric("Puntaje promedio general", round(df_scored["Score_total"].mean(), 2))
+    st.metric("Mejor proveedor", df_scored.loc[df_scored["Score_total"].idxmax(), "Proveedor"])
+    st.metric("Peor proveedor", df_scored.loc[df_scored["Score_total"].idxmin(), "Proveedor"])
+
+    fig_hist = px.histogram(df_scored, x="Score_total", nbins=20, title="Distribución de Puntajes Generales")
+    st.plotly_chart(fig_hist)
+
     # Mostrar ranking
     st.subheader("Ranking de proveedores")
     ranking = df_scored[["Proveedor", "Score_total"]].sort_values(by="Score_total", ascending=False).reset_index(drop=True)
     st.dataframe(ranking.style.background_gradient(cmap='Greens'))
 
-    # Visualización: Top y Bottom 10 por criterio
-    st.subheader("Comparativo de Top 10 y Bottom 10 por criterio")
+    # Visualización: Top y Bottom 10 por criterio con Plotly
+    st.subheader("Comparativo Interactivo de Top 10 y Bottom 10 por criterio")
 
     criterios_visuales = {
         "Precio": "Precio",
@@ -82,21 +92,15 @@ if archivo is not None:
     for criterio, columna in criterios_visuales.items():
         st.markdown(f"### {criterio}")
 
-        # Top 10
+        # Top 10 interactivo
         top10 = df_scored.nlargest(10, columna)[["Proveedor", columna]].sort_values(by=columna, ascending=True)
-        fig_top, ax_top = plt.subplots()
-        ax_top.barh(top10["Proveedor"], top10[columna], color='green')
-        ax_top.set_title(f"Top 10 proveedores por {criterio}")
-        ax_top.set_xlabel(criterio)
-        st.pyplot(fig_top)
+        fig_top = px.bar(top10, x=columna, y="Proveedor", orientation="h", title=f"Top 10 proveedores por {criterio}", color=columna)
+        st.plotly_chart(fig_top)
 
-        # Bottom 10
+        # Bottom 10 interactivo
         bottom10 = df_scored.nsmallest(10, columna)[["Proveedor", columna]].sort_values(by=columna, ascending=True)
-        fig_bottom, ax_bottom = plt.subplots()
-        ax_bottom.barh(bottom10["Proveedor"], bottom10[columna], color='red')
-        ax_bottom.set_title(f"Bottom 10 proveedores por {criterio}")
-        ax_bottom.set_xlabel(criterio)
-        st.pyplot(fig_bottom)
+        fig_bottom = px.bar(bottom10, x=columna, y="Proveedor", orientation="h", title=f"Bottom 10 proveedores por {criterio}", color=columna)
+        st.plotly_chart(fig_bottom)
 
 else:
     st.info("Por favor, sube un archivo Excel para comenzar.")
